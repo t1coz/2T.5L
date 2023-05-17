@@ -5,8 +5,12 @@
 #include <stdio.h>
 #include "cache.h"
 #include "functionsForFile.h"
-void menuInterface(HashTable* cache);
-void functionsSelection(HashTable* cache, int choice);
+void findingIP(Cache* cache);
+void showAllTheIPs();
+void addDns();
+void addCNameAddress();
+
+void functionsSelection(Cache** cache, int choice);
 int methodOfInput(int size);
 void getStr(char **string);
 #endif

@@ -1,102 +1,185 @@
 #include "cache.h"
 #include "functionsForFile.h"
-unsigned int hash(const char* str){
+unsigned int hashFunction(const char* str){
     unsigned int hash = 0;
-    while (*str){
-        hash = hash * 101 + *str++;
+    int i;
+    for (i = 0; i < strlen(str); i++) {
+        hash = (hash * 47 + str[i]) % HASH_SIZE;
     }
     return hash;
 }
-unsigned int hashFunction(const char* key, int sizeOfTable){
-    return hash(key) % sizeOfTable;
+Cache* cacheCreation(int capacity){
+    Cache* cache = (Cache*) malloc(sizeof(Cache));
+    cache->size = 0;
+    cache->capacity = capacity;
+    cache->table = (CacheNode**)calloc(HASH_SIZE, sizeof(CacheNode*));
+    cache->list = (CacheList*)malloc(sizeof(CacheList));
+    cache->list->head = NULL;
+    cache->list->tail = NULL;
+    return cache;
 }
-HashTable* hashtableCreation(){
-    HashTable* table = malloc(sizeof(HashTable));
-    table->size = MAX_HASH_SIZE;
-    table->table = malloc(sizeof(HashEntry*) * table->size);
-    for (int i = 0; i < table->size; i++){
-        table->table[i] = NULL;
-    }
-    return table;
-}
-int searchingWithin(HashTable* table, const char* key){
-    unsigned int index = hashFunction(key, table->size);
-    HashEntry* current = table->table[index];
-    HashEntry* prev = NULL;
-    while (current != NULL){
-        if (strcmp(current->key, key) == 0){
-            printf("\033[0;33mFound IP Address\033[0m: %s\n", current->value);
+void addToCache(Cache* cache, const char* key, const char* value){
+    unsigned int hash = hashFunction(key);
+    CacheNode* node = cache->table[hash];
+    CacheNode* prev = NULL;
+    while (node != NULL){
+        if (strcmp(node->key, key) == 0) {
+//            free(node->value);
+//            node->value = strdup(value);
             if (prev != NULL) {
-                prev->next = current->next;
-                if (current->next != NULL){
-                    current->next->prev = prev;
+                prev->next = node->next;
+                if (node->next != NULL) {
+                    node->next->prev = prev;
                 }
-                current->prev = NULL;
-                current->next = table->table[index];
-                table->table[index]->prev = current;
-                table->table[index] = current;
+                node->prev = NULL;
+                node->next = cache->table[hash];
+                cache->table[hash]->prev = node;
+                cache->table[hash] = node;
             }
-            HashEntry* next = current->next;
-            while (next != NULL){
-                next->prev = next->prev == current ? NULL : current;
-                current->next = next;
-                current->prev = prev;
-                prev = current;
-                current = next;
-                next = next->next;
+            // Update the position in the list
+            if (cache->list->head != node) {
+                if (node->next != NULL) {
+                    node->next->prev = node->prev;
+                } else {
+                    cache->list->tail = node->prev;
+                }
+                node->prev->next = node->next;
+                node->prev = NULL;
+                node->next = cache->list->head;
+                cache->list->head->prev = node;
+                cache->list->head = node;
             }
-            return 1;
+            return;
         }
-        prev = current;
-        current = current->next;
+        prev = node;
+        node = node->next;
     }
-    return 0;
-}
-void surfaceSearching(HashTable* table, const char* key){
-    if(searchingWithin(table, key) == 0){
-        ipSearch(table, "listOfDNSAndIP.txt", key, NULL);
-    }else{
-        return;
+    node = (CacheNode*) malloc(sizeof(CacheNode));
+    node->key = strdup(key);
+    node->value = strdup(value);
+    node->prev = NULL;
+    node->next = cache->table[hash];
+    if (node->next != NULL){
+        node->next->prev = node;
     }
-    searchingWithin(table, key);
+    cache->table[hash] = node;
+    cache->size++;
+    // Add the node to the front of the list
+    if (cache->list->head != NULL) {
+        node->next = cache->list->head;
+        cache->list->head->prev = node;
+        cache->list->head = node;
+    } else {
+        cache->list->head = node;
+        cache->list->tail = node;
+    }
+
+    if (cache->size > cache->capacity) {
+        CacheNode* LRUNode = cache->list->tail;
+        cache->list->tail = LRUNode->prev;
+        if (cache->list->tail != NULL) {
+            cache->list->tail->next = NULL;
+        } else {
+            cache->list->head = NULL;
+        }
+        unsigned int LRUHash = hashFunction(LRUNode->key);
+        if (cache->table[LRUHash] == LRUNode) {
+            cache->table[LRUHash] = NULL;
+        }
+        free(LRUNode->key);
+        free(LRUNode->value);
+        free(LRUNode);
+        cache->size--;
+    }
 }
-void addToHashtable(HashTable* table, const char* key, const char* value){
-    unsigned int index = hashFunction(key, table->size);
-    HashEntry* set = malloc(sizeof(HashEntry));
-    set->key = strdup(key);
-    set->value = strdup(value);
-    int count = 0;
-    if(table->table[index] != NULL){
-        HashEntry* current = table->table[index];
-        while(current != NULL){
-            count++;
-            if(count >= MAX_CACHE_SIZE-1 && current->next != NULL){
-                printf("Removing %s\n", current->next->key);
-                free(current->next);
-                current->next = NULL;
+char* getFromCache(Cache* cache, char* key){
+    unsigned int hash = hashFunction(key);
+    CacheNode *node = cache->table[hash];
+    while (node != NULL){
+        if (strcmp(node->key, key) == 0){
+            if (cache->list->head != node){
+                if (node->next != NULL){
+                    node->next->prev = node->prev;
+                }else{
+                    cache->list->tail = node->prev;
+                }
+                node->prev->next = node->next;
+                node->prev = NULL;
+                node->next = cache->list->head;
+                cache->list->head->prev = node;
+                cache->list->head = node;
+            }
+            return node->value;
+        }
+        node = node->next;
+    }
+    return NULL;
+}
+char* findFromCache(Cache* cache, FILE* file, char* key, int* addNew){
+    char* result = getFromCache(cache, key);
+    if (result != NULL){
+        if (cache->size == 1)
+            (*addNew)++;
+        return result;
+    }
+    rewind(file);
+    char currentWord[MAX_WORD_LENGTH];
+    char prevWord[MAX_WORD_LENGTH];
+    int found = 0;
+    while (fscanf(file, "%s", currentWord) == 1){
+        if (isdigit(key[0])){
+            if (found){
+                result = strdup(prevWord);
                 break;
             }
-            current = current->next;
+            if (wordComparison(currentWord, key)){
+                found = 1;
+                continue;
+            }
+            strcpy(prevWord, currentWord);
+        }
+        if (isalpha(key[0])){
+            if (found) {
+                if (isalpha(currentWord[0])) {
+                    result = findFromCache(cache, file, currentWord, addNew);
+                    break;
+                }
+                result = strdup(currentWord);
+                break;
+            }
+            if (wordComparison(currentWord, key)){
+                found = 1;
+                continue;
+            }
         }
     }
-    set->prev = NULL;
-    set->next = table->table[index];
-    if (table->table[index] != NULL){
-        table->table[index]->prev = set;
+    if (wordComparison(currentWord, key)){
+        result = strdup(prevWord);
     }
-    table->table[index] = set;
+    return result;
 }
-void hashtableDeletion(HashTable* table) {
-    for (int i = 0; i < table->size; i++) {
-        HashEntry* current = table->table[i];
-        while (current != NULL) {
-            HashEntry* next = current->next;
-            free(current->key);
-            free(current->value);
-            free(current);
-            current = next;
-        }
+void cachePrinting(Cache* cache){
+    CacheNode* node = cache->list->head;
+    int num = 1;
+    printf("Current cache:\n");
+    while (node != NULL){
+        printf("%d: %s | %s\n", num, node->key, node->value);
+        node = node->next;
+        num++;
     }
-    free(table->table);
-    free(table);
+    if(num == 1)
+        printf("The cache is empty.\n");
+}
+void cacheDeletion(Cache* cache){
+    CacheNode* node = cache->list->head;
+    while (node != NULL) {
+        CacheNode* next = node->next;
+        free(node->key);
+        free(node->value);
+        free(node);
+        node = next;
+    }
+    free(cache->list);
+    free(cache->table);
+    free(cache);
 }

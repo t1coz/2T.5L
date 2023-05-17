@@ -1,45 +1,111 @@
 #include "menuCommands.h"
-void functionsSelection(HashTable* cache, int choice){
-    char* userDNS = NULL;
-    char* userIP = NULL;
+#include "cache.h"
+
+void findingIP(Cache* cache){
+    FILE *file = fopen("dns.txt", "r");
+    if (file == NULL)
+        printf("\nUnable to open the file.");
+    printf("Write DNS or IP address: ");
+    char* result = wordSearching(file, cache);
+    if (result != NULL) {
+        printf("Result: %s\n", result);
+    }else{
+        printf("No matches in the file.\n");
+    }
+    fclose(file);
+}
+void showAllTheIPs(){
+    printf("Write IP address: ");
+    char *IP;
+    getStr(&IP);
+    DNSByIPAddress(IP);
+}
+void addDns(){
+    FILE *file = fopen("dns.txt", "a+");
+    if (file == NULL) {
+        printf("\nUnable to open the file.");
+        return;
+    }
+    char *dns = NULL;
+    char *IP = NULL;
+    printf("Write DNS address: ");
+    getStr(&dns);
+    printf("Write IP address: ");
+    getStr(&IP);
+    addDNSToFile(dns, IP);
+}
+void addCNameAddress(){
+    FILE *file = fopen("dns.txt", "a+");
+    if (file == NULL) {
+        printf("\nUnable to open the file.");
+        exit(1);
+    }
+    char *dns = NULL;
+    char* result = (char*)calloc(DNS, sizeof(char));
+    printf("Write DNS address: ");
+    getStr(&dns);
+    char word[MAX_WORD_LENGTH];
+    while(fscanf(file, "%s", word) == 1) {
+        if(wordComparison(dns, word)) {
+            printf("DNS repetition is found.\n");
+            rewind(stdin);
+            rewind(file);
+            getStr(&dns);
+        }
+    }
+    strcat(result, "\n");
+    strcat(result, dns);
+    strcat(result, " ");
+    rewind(stdin);
+    printf("Write CNAME address: ");
+    getStr(&dns);
+    int flag = 0;
+    rewind(file);
+    while(flag == 0) {
+        while(fscanf(file, "%s", word) == 1) {
+            if(wordComparison(dns, word)) {
+                flag++;
+            }
+        }
+        if(flag == 0) {
+            printf("CNAME repetition is not found. Try again: ");
+            rewind(stdin);
+            rewind(file);
+            getStr(&dns);
+        }
+    }
+    strcat(result, dns);
+    fprintf(file, "%s", result);
+    free(dns);
+    fclose(file);
+}
+//-----------------------------------------------------
+void functionsSelection(Cache** cache, int choice){
     switch (choice){
         case 1:
-            printf("Enter the DNS: ");
-            getStr(&userDNS);
-            surfaceSearching(cache, userDNS);
+            findingIP(*cache);
             break;
         case 2:
-            printf("Enter the IP: ");
-            getStr(&userIP);
-            DNSByIPAddress(userIP, "listOfDNSAndIP.txt");
+            addDns();
             break;
         case 3:
-            printf("Enter the DNS: ");
-            getStr(&userDNS);
-            printf("Enter the IP: ");
-            getStr(&userIP);
-            addDNSToFile("listOfDNSAndIP.txt", userDNS, userIP);
+            addCNameAddress();
             break;
         case 4:
-            printf("");
-            HashEntry * current = NULL;
-            for(int i = 0; i < cache->size; i++) {
-                current = cache->table[i];
-                while (current != NULL) {
-                    printf("%s | %s\n", current->key, current->value);
-                    current = current->next;
-                }
-            }
+            cachePrinting(*cache);
             break;
         case 5:
-            hashtableDeletion(cache);
-            //cache = hashtableCreation();
+            cacheDeletion(*cache);
+            *cache = cacheCreation(MAX_CACHE_SIZE);
+            break;
+        case 6:
+            showAllTheIPs();
             break;
         default:
             break;
     }
 }
-void menuInterface(HashTable* cache){
+void menuInterface(Cache* cache){
     printf("\nTheme: \033[0;36mSearching in cache.\033[0m\n");
     while(1){
         printf("\n\033[0;32mChoose what to do:\033[0m"
@@ -57,7 +123,7 @@ void menuInterface(HashTable* cache){
             return;
         }
         printf("\n");
-        functionsSelection(cache, choice);
+        functionsSelection(&cache, choice);
     }
 }
 int methodOfInput(int size){

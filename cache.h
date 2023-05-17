@@ -1,28 +1,38 @@
 #ifndef INC_5LAB_CACHE_H
 #define INC_5LAB_CACHE_H
-#define MAX_HASH_SIZE 4
-#define MAX_CACHE_SIZE 4
+#define DNS 100
+#define MAX_WORD_LENGTH 256
+#define MAX_CACHE_SIZE 3
+#define HASH_SIZE 1024
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-typedef struct HashEntry{
+#include <ctype.h>
+typedef struct CacheNode{
     char* key;
     char* value;
-    struct HashEntry* prev;
-    struct HashEntry* next;
-}HashEntry;
+    struct CacheNode* prev;
+    struct CacheNode* next;
+}CacheNode;
 
-typedef struct HashTable{
+typedef struct CacheList{
+    CacheNode *head;
+    CacheNode *tail;
+}CacheList;
+
+typedef struct Cache{
     int size;
-    HashEntry** table;
-}HashTable;
+    int capacity;
+    CacheNode** table;
+    CacheList* list;
+}Cache;
 
-unsigned int hash(const char* str);
-unsigned int hashFunction(const char* key, int sizeOfTable);
-HashTable* hashtableCreation();
-void hashtableDeletion(HashTable* table);
-int searchingWithin(HashTable* table, const char* key);
-void surfaceSearching(HashTable* table, const char* key);
-void addToHashtable(HashTable* table, const char* key, const char* value);
+unsigned int hashFunction(const char* str);
+
+Cache* cacheCreation(int capacity);
+void addToCache(Cache* cache, const char* key, const char* value);
+char* getFromCache(Cache* cache, char* key);
+char* findFromCache(Cache* cache, FILE* file, char* key, int* addNew);
+void cachePrinting(Cache* cache);
+void cacheDeletion(Cache* cache);
 #endif
